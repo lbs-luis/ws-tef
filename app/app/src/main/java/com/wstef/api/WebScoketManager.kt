@@ -24,7 +24,15 @@ class WebSocketManager(
     }
 
     fun disconnect() {
+        Log.d("WebSocket", "Conexão Fechada")
+
         webSocket?.close(1000, "Closing connection")
+    }
+
+    fun send(message: String) {
+        Log.d("WebSocket", "Mensagem enviada: $message")
+
+        webSocket?.send(message)
     }
 
     override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -51,12 +59,14 @@ class WebSocketManager(
 
     override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
         Log.d("WebSocket", "Conexão fechando: $code/$reason")
+
         webSocket.close(1000, null)
         onDisconnect()
     }
 
     override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
         Log.e("WebSocket", "Falha: ${t.message}")
+
         onDisconnect()
     }
 }

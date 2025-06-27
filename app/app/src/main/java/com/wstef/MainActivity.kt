@@ -22,6 +22,12 @@ import com.wstef.ui.theme.WstefTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import cielo.sdk.order.payment.PaymentCode
+import com.wstef.cielo.Cielo
+import com.wstef.cielo.PaymentResult
+import com.wstef.cielo.PaymentResultListener
 
 
 class MainActivity : ComponentActivity() {
@@ -73,7 +79,7 @@ class MainActivity : ComponentActivity() {
                 }
             )
         } else {
-            PagamentoScreen(paymentData)
+            PagamentoScreen(paymentData, wsManager)
         }
     }
 
@@ -160,48 +166,133 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    fun PagamentoScreen(paymentData: PaymentData) {
-        Box(
+    fun PagamentoScreen(paymentData: PaymentData, wsManager: WebSocketManager?) {
+        val context = LocalContext.current
+
+        // Instância anônima do listener
+        val paymentListener = object : PaymentResultListener {
+            override fun onPaymentComplete(result: PaymentResult) {
+                val json = org.json.JSONObject().apply {
+                    put("event", "payment_complete")
+                    put("transacaoId", result.transacaoId)
+                    put("nsu", result.nsu)
+                    put("autorizacao", result.autorizacao)
+                    put("valor", result.valor)
+                }
+                wsManager?.send(json.toString())
+            }
+
+            override fun onPaymentError(message: String) {
+            }
+
+            override fun onPaymentCancelled() {
+            }
+        }
+
+        val cieloManager = remember {
+            //Credentials
+            Cielo(
+                context,
+                "8bkr20CrFxTUxIbFQhKGX0oL0JVhbU9PF891gyoWuQnvMFIUS5",
+                "P9k5e8ZcUmg8w3Z0Hm5paWdT3QNSDyFpLQy7bWHUmDNVosYbiY",
+                paymentListener
+            )
+        }
+        var mensagem by remember { mutableStateOf("") }
+
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gray),
-            contentAlignment = Alignment.Center
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
+            Box(
                 modifier = Modifier
                     .width(340.dp)
                     .shadow(8.dp, RoundedCornerShape(16.dp))
                     .background(white, RoundedCornerShape(16.dp))
                     .padding(28.dp)
             ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "Pagamento",
+                        color = blue,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    )
+                    CampoArredondado(
+                        label = "Valor Total",
+                        value = "R$ ${paymentData.valorTotal}",
+                        background = gray,
+                        textColor = black
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    CampoArredondado(
+                        label = "Descontos",
+                        value = "- R$ ${paymentData.descontos}",
+                        background = gray,
+                        textColor = black
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    CampoArredondado(
+                        label = "Total a Pagar",
+                        value = "R$ ${paymentData.totalPagar}",
+                        background = green.copy(alpha = 0.15f),
+                        textColor = green,
+                        bold = true
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row (
+                modifier = Modifier
+                .width(340.dp)
+                .align(Alignment.CenterHorizontally)
+                .padding(0.dp)
+            ) {
+                Button(
+                    onClick = {
+                        cieloManager.startPayment(
+                            (paymentData.totalPagar * 100).toLong(),
+                            PaymentCode.DEBITO_AVISTA
+                        )
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = green),
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .padding(horizontal = 20.dp)
+
+                ) {
+                    Text("Pagar Débito", fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = {
+                        cieloManager.startPayment(
+                            (paymentData.totalPagar * 100).toLong(),
+                            PaymentCode.PIX
+                        )
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = green),
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .padding(horizontal = 20.dp)
+
+                ) {
+                    Text("Pagar Pix", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (mensagem.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Pagamento",
-                    color = blue,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 24.dp)
-                )
-                CampoArredondado(
-                    label = "Valor Total",
-                    value = "R$ ${paymentData.valorTotal}",
-                    background = gray,
-                    textColor = black
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                CampoArredondado(
-                    label = "Descontos",
-                    value = "- R$ ${paymentData.descontos}",
-                    background = gray,
-                    textColor = black
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                CampoArredondado(
-                    label = "Total a Pagar",
-                    value = "R$ ${paymentData.totalPagar}",
-                    background = green.copy(alpha = 0.15f),
-                    textColor = green,
-                    bold = true
+                    mensagem,
+                    color = if (mensagem.contains("Erro")) Color.Red else Color.Black
                 )
             }
         }
